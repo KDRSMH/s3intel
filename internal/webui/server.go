@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"os"
 
 	"s3intel/internal/riskengine"
 	"s3intel/internal/scanjobs"
@@ -39,6 +40,8 @@ const pageTemplate = `<!doctype html>
   .badge { display: inline-block; font-size: 10.5px; font-weight: bold; padding: 2px 8px; border-radius: 999px; margin-left: 8px; vertical-align: middle; }
   .badge.active { background: #fee2e2; color: #b91c1c; }
   .badge.passive { background: #ccfbf1; color: #0f766e; }
+  .info { background: #eff6ff; border-left: 4px solid #3b82f6; padding: 10px 14px; border-radius: 0 6px 6px 0; color: #1e40af; margin-bottom: 16px; font-size: 13px; }
+  .api-key-field { flex: 1 1 200px; }
 </style>
 </head>
 <body>
@@ -48,15 +51,29 @@ const pageTemplate = `<!doctype html>
   <p class="sub">Aktif mod SADECE whitelist'teki bucket'lara gerçek AWS çağrısı yapar. Pasif mod hiçbir zaman gerçek bir bucket'a bağlanmaz.</p>
 
   <form method="get" action="/">
-    <select name="mode">
+    <select name="mode" id="modeSelect" onchange="toggleApiKey()">
       <option value="passive" {{if eq .Mode "passive"}}selected{{end}}>Pasif (grayhatwarfare)</option>
       <option value="active" {{if eq .Mode "active"}}selected{{end}}>Aktif (whitelist bucket'ın)</option>
     </select>
     <input type="text" name="target" placeholder="bucket adı (aktif) ya da anahtar kelime (pasif)" value="{{.Target}}" required>
+    <input type="text" name="apikey" id="apikeyInput" class="api-key-field" placeholder="GHW API Key (zorunlu — pasif mod)" value="{{.APIKey}}" {{if eq .Mode "active"}}style="display:none"{{end}}>
     <button type="submit">Tara</button>
   </form>
 
+  <script>
+  function toggleApiKey() {
+    var mode = document.getElementById('modeSelect').value;
+    var apikeyInput = document.getElementById('apikeyInput');
+    if (mode === 'passive') {
+      apikeyInput.style.display = '';
+    } else {
+      apikeyInput.style.display = 'none';
+    }
+  }
+  </script>
+
   {{if .Error}}<div class="error"><b>Hata:</b> {{.Error}}</div>{{end}}
+  {{if .Info}}<div class="info">{{.Info}}</div>{{end}}
 
   {{if .Submitted}}
     {{if .Results}}
@@ -95,8 +112,10 @@ type row struct {
 type pageData struct {
 	Mode      string
 	Target    string
+	APIKey    string
 	Submitted bool
 	Error     string
+	Info      string
 	Results   []row
 }
 
@@ -132,8 +151,9 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 		mode = "passive"
 	}
 	target := r.URL.Query().Get("target")
+	apiKey := r.URL.Query().Get("apikey")
 
-	data := pageData{Mode: mode, Target: target}
+	data := pageData{Mode: mode, Target: target, APIKey: apiKey}
 
 	if target != "" {
 		data.Submitted = true
@@ -145,7 +165,15 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 		case "active":
 			results, err = scanjobs.RunActive(r.Context(), target)
 		case "passive":
-			results, err = scanjobs.RunPassive(r.Context(), target)
+			// API key öncelik sırası: form > ortam değişkeni
+			effectiveKey := apiKey
+			if effectiveKey == "" {
+				effectiveKey = os.Getenv("GHW_API_KEY")
+			}
+			if effectiveKey == "" {
+				data.Info = "GHW API Key girilmedi ve GHW_API_KEY ortam değişkeni ayarlı değil. Mock (örnek) veri gösteriliyor."
+			}
+			results, err = scanjobs.RunPassiveWithKey(r.Context(), target, effectiveKey)
 		}
 
 		if err != nil {

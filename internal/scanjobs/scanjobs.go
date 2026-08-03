@@ -45,7 +45,14 @@ func RunActive(ctx context.Context, bucket string) ([]riskengine.Result, error) 
 // bir anahtar kelimeyi arayıp skorlanmış sonuçları döner. İçerik hiç
 // indirilmediği için Secrets her zaman boştur.
 func RunPassive(ctx context.Context, keyword string) ([]riskengine.Result, error) {
-	searchResults, err := passiveintel.Search(ctx, keyword)
+	return RunPassiveWithKey(ctx, keyword, "")
+}
+
+// RunPassiveWithKey, verilen API key ile grayhatwarfare üzerinden anahtar
+// kelimeyi arayıp skorlanmış sonuçları döner. apiKey boşsa ortam değişkenine
+// veya mock'a geri döner.
+func RunPassiveWithKey(ctx context.Context, keyword, apiKey string) ([]riskengine.Result, error) {
+	searchResults, err := passiveintel.SearchWithKey(ctx, keyword, apiKey)
 	if err != nil {
 		return nil, err
 	}
