@@ -6,9 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"s3intel/internal/classifier"
-	"s3intel/internal/passiveintel"
-	"s3intel/internal/riskengine"
+	"s3intel/internal/scanjobs"
 )
 
 var passiveKeyword string
@@ -28,24 +26,12 @@ import etmez.`,
 			fmt.Printf("[passive] grayhatwarfare '%s' anahtar kelimesiyle sorgulanıyor...\n", passiveKeyword)
 		}
 
-		searchResults, err := passiveintel.Search(context.Background(), passiveKeyword)
+		results, err := scanjobs.RunPassive(context.Background(), passiveKeyword)
 		if err != nil {
 			return err
 		}
 
-		items := make([]riskengine.Item, 0, len(searchResults))
-		for _, r := range searchResults {
-			cat, baseRisk := classifier.Classify(r.Filename)
-			items = append(items, riskengine.Item{
-				Key:      r.FullPath,
-				Source:   "passive",
-				Category: cat,
-				BaseRisk: baseRisk,
-				Secrets:  nil, // pasif modda dosya içeriği hiç indirilmez, secretscan çalışmaz
-			})
-		}
-
-		return writeResults(riskengine.ScoreAll(items))
+		return writeResults(results)
 	},
 }
 

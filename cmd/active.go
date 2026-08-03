@@ -6,8 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"s3intel/internal/activeprobe"
-	"s3intel/internal/riskengine"
+	"s3intel/internal/scanjobs"
 )
 
 var activeBucket string
@@ -27,22 +26,11 @@ hata ile durur.`,
 			fmt.Printf("[active] %s bucket'ı için whitelist kontrol ediliyor...\n", activeBucket)
 		}
 
-		findings, err := activeprobe.EnumerateBucket(context.Background(), activeBucket)
+		results, err := scanjobs.RunActive(context.Background(), activeBucket)
 		if err != nil {
 			return err
 		}
 
-		items := make([]riskengine.Item, 0, len(findings))
-		for _, f := range findings {
-			items = append(items, riskengine.Item{
-				Key:      f.Key,
-				Source:   "active",
-				Category: f.Category,
-				BaseRisk: f.BaseRisk,
-				Secrets:  f.SecretFindings,
-			})
-		}
-		results := riskengine.ScoreAll(items)
 		return writeResults(results)
 	},
 }
