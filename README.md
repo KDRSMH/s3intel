@@ -1,72 +1,108 @@
 # s3intel
 
-`s3intel`, AWS S3 keşfi ve istihbaratı için yazılmış, Go dilinde bir
-komut satırı aracıdır. Bir dosyayı sınıflandırır (isim/uzantı), içeriğinde
-regex + Shannon entropy ile olası sızmış secret/token arar ve bulguları
-0-100 arası bir risk skoruyla önceliklendirilmiş biçimde raporlar.
+**s3intel**, AWS S3 bucket'larındaki güvenlik açıklarını tespit etmek için yazılmış bir keşif ve istihbarat aracıdır. Go diliyle geliştirilmiştir.
 
-**Aktif mod SADECE `config/whitelist.yaml` içindeki kendi test
-bucket'larına karşı çalışır. Pasif mod hiçbir zaman gerçek bir bucket'a
-bağlanmaz** — sadece grayhatwarfare üzerinden zaten indekslenmiş veriyi
-okur. Bu ayrım sadece işlevsel değil, paket seviyesinde de mimari olarak
-ayrılmıştır; ayrıntı ve kanıt için [docs/architecture.md](docs/architecture.md)
-dosyasına bakın.
+## Ne İşe Yarar?
+
+s3intel, açık bırakılmış veya yanlış yapılandırılmış S3 bucket'larındaki hassas dosyaları (API anahtarları, veritabanı yedekleri, özel anahtarlar, kimlik bilgileri vb.) tespit eder ve her bulguya **0–100 arası risk skoru** verir.
+
+Araç iki farklı modda çalışır:
+
+| Mod | Ne Yapar | Neye Bağlanır |
+|-----|----------|---------------|
+| **Aktif** | Gerçek AWS S3 API çağrısı yaparak bucket içeriğini tarar | Sadece `config/whitelist.yaml` içindeki bucket'lar |
+| **Pasif** | [grayhatwarfare](https://buckets.grayhatwarfare.com) API'si üzerinden zaten indekslenmiş verileri arar | Sadece grayhatwarfare API (gerçek bucket'a bağlanmaz) |
+
+Bu iki mod paket seviyesinde fiziksel olarak birbirinden ayrılmıştır. Pasif mod hiçbir zaman AWS SDK kullanmaz, aktif mod hiçbir zaman grayhatwarfare'e istek atmaz.
 
 ## Kurulum
 
+**Gereksinimler:** Go 1.21+
+
 ```bash
+# Bağımlılıkları indir
 go mod download
+
+# Derle
 go build -o s3intel .
 ```
 
-Ya da `make` ile tek adımda:
+Ya da `make` ile:
 
 ```bash
-make build   # sadece derler
-make test    # go test ./...
-make web     # derler + tarayıcı arayüzünü başlatır (http://127.0.0.1:8080)
+make build   # derle
+make test    # testleri çalıştır
+make web     # derle + web arayüzünü başlat
 ```
 
-## Tarayıcıda çalıştırma (en kolay yol)
+## Nasıl Çalıştırılır?
+
+### 1. Web Arayüzü (En Kolay Yol)
 
 ```bash
-make web
-# ya da: ./s3intel serve --port 8080
+./s3intel serve
+# ya da: make web
 ```
 
-Tarayıcında **http://127.0.0.1:8080** adresini aç. Açılan sayfada mod
-(Aktif/Pasif) seç, bucket adı ya da anahtar kelimeyi yaz, "Tara" butonuna
-bas — sonuçlar renkli bir tablo olarak aynı sayfada görünür. Flag
-ezberlemene gerek yok. Sunucu SADECE `127.0.0.1`'e bağlanır, dışarıdan
-erişilemez; kapatmak için terminalde `Ctrl+C`.
+Tarayıcında **http://127.0.0.1:8080** adresini aç. Açılan sayfada:
 
-Arka planda web arayüzü de tam olarak aynı `internal/scanjobs` katmanını,
-dolayısıyla aynı whitelist kuralını ve aynı aktif/pasif ayrımını kullanır —
-CLI'den farkı sadece görselleştirmedir.
+1. **Mod** seç (Pasif veya Aktif)
+2. **Anahtar kelime** yaz (pasif modda) veya **bucket adı** yaz (aktif modda)
+3. Pasif moddaysan **GHW API Key** alanına API anahtarını gir
+4. **Tara** butonuna bas
 
-## Komut satırından çalıştırma
+Sonuçlar renkli bir tablo olarak sayfada görünür. Sunucu sadece `127.0.0.1`'e bağlanır, dışarıdan erişilemez. Kapatmak için terminalde `Ctrl+C`.
+
+### 2. Komut Satırı (CLI)
 
 ```bash
-# AKTIF: whitelist'teki bir bucket'ı tara, terminale renkli tablo bas
-./s3intel active --bucket test-lab-level1 --output terminal
-
-# AKTIF: sonucu JSON dosyasına yaz
-./s3intel active --bucket test-lab-level1 --output json --output-file results.json
-
 # PASİF: grayhatwarfare'de "backup" anahtar kelimesini ara
-./s3intel passive --keyword backup --output terminal
+export GHW_API_KEY="senin-api-anahtarın"
+./s3intel passive --keyword backup
 
-# PASİF: sonucu CSV dosyasına yaz
-./s3intel passive --keyword .env --output csv --output-file findings.csv
+# PASİF: sonucu JSON dosyasına kaydet
+./s3intel passive --keyword .env --output json --output-file sonuclar.json
+
+# PASİF: sonucu CSV dosyasına kaydet
+./s3intel passive --keyword sql --output csv --output-file bulgular.csv
+
+# AKTİF: whitelist'teki bir bucket'ı tara
+./s3intel active --bucket test-lab-level1
+
+# AKTİF: sonucu JSON dosyasına kaydet
+./s3intel active --bucket test-lab-level1 --output json --output-file sonuclar.json
 ```
 
-Global flag'ler (`--output`, `--output-file`, `--verbose`) hem `active` hem
-`passive` komutlarında geçerlidir.
+### Çıktı Formatları
 
-## Whitelist nasıl güncellenir
+`--output` parametresiyle çıktı formatını seçebilirsin:
 
-Aktif modda taranabilecek bucket'lar `config/whitelist.yaml` dosyasında
-listelenir:
+| Format | Açıklama |
+|--------|----------|
+| `terminal` | Renkli tablo (varsayılan) |
+| `json` | JSON formatı |
+| `csv` | CSV formatı |
+
+`--output-file dosya_adı` ile çıktıyı dosyaya kaydedebilirsin. Belirtilmezse ekrana yazdırılır.
+
+## GHW API Key Ayarlama
+
+Pasif mod, [grayhatwarfare](https://buckets.grayhatwarfare.com) API'sini kullanır. API anahtarını iki şekilde verebilirsin:
+
+**1. Ortam değişkeni olarak (CLI için):**
+```bash
+export GHW_API_KEY="senin-api-anahtarın"
+```
+
+**2. Web arayüzünden (tarayıcı için):**
+
+Web panelinde pasif mod seçildiğinde ekranda çıkan **GHW API Key** alanına anahtarını yaz.
+
+> **Not:** API key verilmezse araç mock (sahte) örnek veriyle çalışır. Bu sayede gerçek bir API anahtarın olmadan da aracı deneyebilirsin.
+
+## Whitelist Ayarlama (Aktif Mod)
+
+Aktif modda taranabilecek bucket'lar `config/whitelist.yaml` dosyasında tanımlanır:
 
 ```yaml
 allowed_buckets:
@@ -74,20 +110,27 @@ allowed_buckets:
   - "kadir-s3intel-test-bucket"
 ```
 
-Buraya **sadece kendi kontrolündeki / test etmek için izinli olduğun**
-bucket adlarını ekle. Listede olmayan bir bucket adıyla `active` komutu
-çalıştırılırsa, `internal/activeprobe/whitelist.go` bunu daha AWS'ye hiçbir
-istek gitmeden reddeder ve hata ile durur.
+Buraya **sadece kendi kontrolündeki veya tarama izni olan** bucket adlarını ekle. Listede olmayan bir bucket'ı taramaya çalışırsan, araç AWS'ye hiçbir istek göndermeden hata verir ve durur.
 
-## grayhatwarfare API key nasıl ayarlanır
+## Risk Skorlama
 
-```bash
-export GHW_API_KEY="gerçek-api-anahtarın"
-```
+Araç her dosyayı iki katmanda değerlendirir:
 
-`GHW_API_KEY` ayarlı değilse `passive` komutu otomatik olarak mock (sahte,
-sabit) örnek veriyle çalışır — yani gerçek bir API key olmadan da aracı
-uçtan uca deneyebilirsin.
+1. **Dosya sınıflandırması** — Dosya adı ve uzantısına göre temel risk puanı atanır:
+
+| Kategori | Örnekler | Temel Risk |
+|----------|----------|------------|
+| Özel Anahtar | `.pem`, `.key`, `id_rsa` | 85 |
+| Kimlik Bilgisi | `.aws/credentials` | 80 |
+| Ortam Değişkeni | `.env` | 70 |
+| Veritabanı | `.sql`, `.db`, `.sqlite` | 60 |
+| Yedek | `.bak`, `.old` | 55 |
+| Arşiv | `.zip`, `.tar.gz` | 30 |
+| Diğer | — | 10 |
+
+2. **Secret tarama** (sadece aktif mod) — Dosya içeriğinde regex ve Shannon entropy ile gizli anahtar/token aranır, bulunan her secret risk skorunu artırır.
+
+Nihai skor **0–100** aralığında olur; kırmızı (≥70), turuncu (≥40), yeşil (<40) olarak renklendirilir.
 
 ## Test
 
@@ -95,15 +138,33 @@ uçtan uca deneyebilirsin.
 go test ./...
 ```
 
-`internal/secretscan` testleri, `testdata/sample_secrets.txt` içindeki
-bilinen (sahte) desenlerle aracın ground-truth doğruluğunu doğrular.
-`internal/activeprobe` testleri, whitelist'te olmayan bir bucket için
-gerçek/mock hiçbir AWS S3 çağrısının tetiklenmediğini kanıtlar.
-`internal/webui` testleri, web arayüzünün aynı whitelist reddini ve aynı
-skorlama sonuçlarını doğru render ettiğini kanıtlar.
+Testler şunları doğrular:
 
-## Mimari
+- **secretscan:** `testdata/sample_secrets.txt` içindeki bilinen desenlerle secret tarama doğruluğu
+- **activeprobe:** Whitelist'te olmayan bucket'lar için hiçbir AWS çağrısı yapılmadığı
+- **passiveintel:** Mock ve HTTP kaynaklarının doğru çalıştığı
+- **webui:** Web arayüzünün aynı whitelist ve skorlama kurallarını uyguladığı
 
-Aktif/pasif ayrımının Mermaid diyagramı ve paket seviyesindeki fiziksel
-ayrımın kanıtı için [docs/architecture.md](docs/architecture.md) dosyasına
-bakın.
+## Proje Yapısı
+
+```
+s3intel/
+├── cmd/                    # CLI komutları (active, passive, serve)
+├── config/                 # Whitelist ayarları
+├── internal/
+│   ├── activeprobe/        # Aktif mod: gerçek AWS S3 tarama
+│   ├── passiveintel/       # Pasif mod: grayhatwarfare API sorgusu
+│   ├── classifier/         # Dosya adı/uzantı bazlı sınıflandırma
+│   ├── secretscan/         # Regex + entropy ile secret tarama
+│   ├── riskengine/         # Risk skorlama motoru
+│   ├── reporter/           # Çıktı formatları (terminal, JSON, CSV)
+│   ├── scanjobs/           # Aktif/pasif orkestrasyon katmanı
+│   └── webui/              # Web arayüzü sunucusu
+├── testdata/               # Test verileri
+├── docs/                   # Mimari belgeler
+├── main.go                 # Giriş noktası
+├── Makefile                # Derleme ve çalıştırma komutları
+└── README.md
+```
+
+Mimari detaylar ve Mermaid diyagramı için [docs/architecture.md](docs/architecture.md) dosyasına bakın.
