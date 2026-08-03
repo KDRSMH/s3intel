@@ -107,7 +107,7 @@ Aktif modda taranabilecek bucket'lar `config/whitelist.yaml` dosyasında tanıml
 ```yaml
 allowed_buckets:
   - "test-lab-level1"
-  - "kadir-s3intel-test-bucket"
+  - "s3intel-test-bucket"
 ```
 
 Buraya **sadece kendi kontrolündeki veya tarama izni olan** bucket adlarını ekle. Listede olmayan bir bucket'ı taramaya çalışırsan, araç AWS'ye hiçbir istek göndermeden hata verir ve durur.
