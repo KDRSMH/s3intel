@@ -1,0 +1,9 @@
+# s3intel AKTIF mod whitelist'i.
+#
+# internal/activeprobe paketi, buradaki allowed_buckets listesinde OLMAYAN
+# hiçbir bucket adına karşı gerçek bir AWS S3 API çağrısı yapmaz. Buraya
+# SADECE kendi kontrolündeki / test etmek için izinli olduğun bucket'ları
+# ekle — asla başkasına ait veya izinsiz bir bucket adı ekleme.
+allowed_buckets:
+  - "test-lab-level1"
+  - "kadir-s3intel-test-bucket"

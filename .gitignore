@@ -1,0 +1,12 @@
+# Derlenmiş ikili dosya — kaynaktan `go build` ile yeniden üretilir, repoya girmez.
+/s3intel
+
+# Remember eklentisinin bu proje klasörü için tuttuğu yerel oturum logları.
+.remember/
+
+# LibreOffice/OpenOffice kilit dosyaları
+.~lock.*#
+
+# OS/editor gürültüsü
+.DS_Store
+*.swp
